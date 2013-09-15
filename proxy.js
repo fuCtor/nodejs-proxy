@@ -99,7 +99,7 @@ function ip_allowed(ip) {
 }
 
 function host_allowed(host) {
-  return !blacklist.some(function(host_) { return host_.test(host); });
+  return blacklist.some(function(host_) { return host_.test(host); });
 }
 
 //header decoding
@@ -235,10 +235,34 @@ function action_proxy(response, request, host){
   });
   
   //proxies to FORWARD answer to real client
-  proxy_request.addListener('response', function(proxy_response) {
+  
+  proxy_request.addListener('response', function(proxy_response) {    
     proxy_response.headers["X-0Ban-proxy"] = "true";
+    var ip = proxy_request.connection.remoteAddress;
+    
+    if (!(ip_allowed(ip) || host_allowed(request.url))) {
+        msg = "IP " + ip + " is not allowed to use this proxy\n";
+        msg += "Host " + request.url + " has been denied by proxy configuration";
+        action_deny(response, msg);
+        security_log(request, response, msg);
+        proxy_request.end();
+        response.end();
+        return;
+    } 
+    
+    
+    
     if(legacy_http && proxy_response.headers['transfer-encoding'] != undefined){
         console.log("legacy HTTP: "+request.httpVersion);
+        
+        if(proxy_response.headers['Content-length'] > config.allow_size )
+        {
+            msg = "Request is longer then " + config.allow_size + 'B';
+            action_deny(response, msg);
+            security_log(request, response, msg);
+            proxy_request.end();
+            response.end();
+        }
         
         //filter headers
         var headers = proxy_response.headers;
@@ -247,7 +271,7 @@ function action_proxy(response, request, host){
         
         //buffer answer
         proxy_response.addListener('data', function(chunk) {
-          buffer += chunk;
+          buffer += chunk;         
         });
         proxy_response.addListener('end', function() {
           headers['Content-length'] = buffer.length;//cancel transfer encoding "chunked"
@@ -258,9 +282,19 @@ function action_proxy(response, request, host){
     } else {
         //send headers as received
         response.writeHead(proxy_response.statusCode, proxy_response.headers);
+                       
+        var size = 0
         
         //easy data forward
         proxy_response.addListener('data', function(chunk) {
+          size += chunk.length;
+          if(size > config.allow_size )
+          {
+            msg = " Request is longer then allow_size";
+            security_log(request, response, msg);
+            proxy_request.end();
+            response.end();
+          }
           response.write(chunk, 'binary');
         });
         proxy_response.addListener('end', function() {
@@ -307,21 +341,9 @@ function server_cb(request, response) {
   //to ensure compartimentation
   if(!security_filter(request, response)) return;
   
+  util.log(request.connection.remoteAddress);
   
   var ip = request.connection.remoteAddress;
-  if (!ip_allowed(ip)) {
-    msg = "IP " + ip + " is not allowed to use this proxy";
-    action_deny(response, msg);
-    security_log(request, response, msg);    
-    return;
-  }
-
-  if (!host_allowed(request.url)) {
-    msg = "Host " + request.url + " has been denied by proxy configuration";
-    action_deny(response, msg);
-    security_log(request, response, msg);    
-    return;
-  }
   
   //loop filter
   request = prevent_loop(request, response);
