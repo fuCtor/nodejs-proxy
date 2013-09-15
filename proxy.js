@@ -10,12 +10,14 @@ var http = require('http'),
     https = require('https'),
     util = require('util'),
     fs   = require('fs'),
+    argv = require('optimist').argv,
     config = require('./config').config,
     blacklist = [],
     iplist    = [],
     hostfilters = {};
 
 //support functions
+
 
 //decode host and port info from header
 function decode_host(host){
@@ -234,12 +236,13 @@ function action_proxy(response, request, host){
   
   //proxies to FORWARD answer to real client
   proxy_request.addListener('response', function(proxy_response) {
+    proxy_response.headers["X-0Ban-proxy"] = "true";
     if(legacy_http && proxy_response.headers['transfer-encoding'] != undefined){
         console.log("legacy HTTP: "+request.httpVersion);
         
         //filter headers
         var headers = proxy_response.headers;
-        delete proxy_response.headers['transfer-encoding'];        
+        delete proxy_response.headers['transfer-encoding'];
         var buffer = "";
         
         //buffer answer
