@@ -19,6 +19,9 @@
     "license": {
         "type": "MIT"
     }, 
+    "dependencies": {
+      "optimist": "0.3.x"
+    },
     "repository": {
         "type": "git",
         "url": "git@github.com:pkrumins/nodejs-proxy.git"
