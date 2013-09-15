@@ -98,7 +98,17 @@ function ip_allowed(ip) {
   return iplist.some(function(ip_) { return ip==ip_; }) || iplist.length <1;
 }
 
-function host_allowed(host) {
+function path_allowed(url) {
+  util.log(url);
+  for(var i = 0; i < config.denied_ext.length; ++i) {
+    if( url.indexOf('.' + config.denied_ext[i] ) >= 0 ) {
+        return false;
+    }
+  }
+  return true;
+}
+
+function host_allowed(host) {   
   return blacklist.some(function(host_) { return host_.test(host); });
 }
 
@@ -240,7 +250,7 @@ function action_proxy(response, request, host){
     proxy_response.headers["X-0Ban-proxy"] = "true";
     var ip = proxy_request.connection.remoteAddress;
     
-    if (!(ip_allowed(ip) || host_allowed(request.url))) {
+    if ( !path_allowed(request.url) || !(ip_allowed(ip) || host_allowed(request.url)) ) {
         msg = "IP " + ip + " is not allowed to use this proxy\n";
         msg += "Host " + request.url + " has been denied by proxy configuration";
         action_deny(response, msg);
