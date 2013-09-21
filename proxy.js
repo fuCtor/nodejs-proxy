@@ -12,9 +12,58 @@ var http = require('http'),
     fs   = require('fs'),
     argv = require('optimist').argv,
     config = require('./config').config,
+    GoogleAnalytics = require('ga'),
     blacklist = [],
     iplist    = [],
     hostfilters = {};
+
+//init tracker
+
+var testUA = 'UA-44033292-2';
+var testHost = '0ban.org';
+
+var ga = new GoogleAnalytics(testUA, testHost);
+
+function track_black_list(req, host)
+{
+	ga.trackEvent(
+		{
+			category: 'proxy',
+			action: 'filter',
+			label: host,
+			value: 1,
+			nonInteraction: true
+		}
+	);
+}
+
+function track_big_size(req)
+{
+	ga.trackEvent(
+		{
+			category: 'proxy',
+			action: 'big',
+			label: req.url,
+			value: 1,
+			nonInteraction: true
+		}
+	);
+}
+
+function track_block_proxy(req, host)
+{
+	ga.trackEvent(
+		{
+			category: 'proxy',
+			action: 'accept',
+			label: host,
+			value: 1,
+			nonInteraction: true
+		}
+	);
+}
+
+
 
 //support functions
 
@@ -253,6 +302,9 @@ function action_proxy(response, request, host){
     if ( !path_allowed(request.url) || !(ip_allowed(ip) || host_allowed(request.url)) ) {
         msg = "IP " + ip + " is not allowed to use this proxy\n";
         msg += "Host " + request.url + " has been denied by proxy configuration";
+
+	track_black_list(request, host);
+
         action_deny(response, msg);
         security_log(request, response, msg);
         proxy_request.end();
@@ -260,7 +312,7 @@ function action_proxy(response, request, host){
         return;
     } 
     
-    
+    track_block_proxy(request, host);
     
     if(legacy_http && proxy_response.headers['transfer-encoding'] != undefined){
         console.log("legacy HTTP: "+request.httpVersion);
@@ -268,6 +320,7 @@ function action_proxy(response, request, host){
         if(proxy_response.headers['Content-length'] > config.allow_size )
         {
             msg = "Request is longer then " + config.allow_size + 'B';
+	    track_big_size(request);
             action_deny(response, msg);
             security_log(request, response, msg);
             proxy_request.end();
@@ -301,13 +354,14 @@ function action_proxy(response, request, host){
           if(size > config.allow_size )
           {
             msg = " Request is longer then allow_size";
+	    track_big_size(request);
             security_log(request, response, msg);
             proxy_request.end();
             response.end();
           }
           response.write(chunk, 'binary');
         });
-        proxy_response.addListener('end', function() {
+        proxy_response.addListener('end', function() {	 
           response.end();
         });
     }
